@@ -90,3 +90,12 @@ test('escolheJogada: o jogo da IA contra ela mesma termina (sem loop infinito)',
 });
 
 function R_estado(s) { return estadoJogo(s); }
+
+
+test('modos de dificuldade: fácil (raso + ruído) e difícil (3s) devolvem coluna válida', () => {
+  const s = estadoInicial();
+  const facil = escolheJogada(s, 150, { profMax: 1, ruido: 90 });
+  assert.ok(facil !== null && facil >= 0 && facil < 7, 'fácil devolve coluna');
+  const dificil = escolheJogada(s, 300, { profMax: 64 });
+  assert.ok(dificil !== null && dificil >= 0 && dificil < 7, 'difícil devolve coluna');
+});

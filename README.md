@@ -7,7 +7,7 @@ Eu queria jogar Lig 4 no navegador com uma IA que joga de verdade — bloqueia a
 - **Avaliação por janelas de 4** (o que faz a IA do Lig 4 jogar forte): cada janela de 4 casas em linha conta — 3 minhas + 1 vazia = um lance da vitória (+60), 2+2 = boa posição (+12), o adversário com 3+1 = bloquear URGENTE (−70); janela misturada vale nada; a coluna do centro vale mais (participa de mais janelas)
 - **Minimax (negamax) com poda alfa-beta + iterative deepening** com orçamento de tempo (PC = 800ms ≈ profundidade 7-9, Impossível = 2500ms ≈ 10-13)
 - **Variedade na escolha**: entre colunas quase equivalentes (≤ 15cp) a IA sorteia — o jogo nunca sai igual
-- **3 modos**: Jogador × Jogador, Jogador × PC, Impossível
+- **4 modos**: Jogador × Jogador · **IA Fácil** (busca rasa + ruído na avaliação — erra lances) · **IA Média** · **IA Difícil** (3 segundos de iterative deepening — profundidade máxima)
 - **Placar de sessão** e destaque da linha vencedora (verde + contorno dourado)
 
 ## Como rodar

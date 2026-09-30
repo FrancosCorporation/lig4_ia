@@ -5,7 +5,7 @@ import { estadoInicial, soltar, estadoJogo, linhaVencedora, linhaDeQueda, COLUNA
 import { escolheJogada } from './ai-minimax.js';
 
 let estado = estadoInicial();
-let modo = 'pc';
+let modo = 'medio';
 let placar = { w: 0, b: 0 };
 let animando = false;
 let vencedorCasas = null;
@@ -75,8 +75,9 @@ function joga(novo, col) {
     animando = true;
     avisa('A IA está pensando...');
     setTimeout(() => {
-      const tempo = modo === 'impossivel' ? 2500 : 800;
-      const col2 = escolheJogada(estado, tempo);
+      const cfg = modo === 'facil' ? { tempo: 150, opts: { profMax: 1, ruido: 90 } }
+                : modo === 'dificil' ? { tempo: 3000 } : { tempo: 800 };
+      const col2 = escolheJogada(estado, cfg.tempo, cfg.opts || {});
       animando = false;
       if (col2 !== null && col2 !== undefined) {
         const novo2 = soltar(estado, col2);
