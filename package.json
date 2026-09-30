@@ -1,0 +1,1 @@
+{"name": "lig4-ia", "version": "1.0.0", "description": "Lig 4 (conecta 4) com IA minimax por janelas de 4 - no browser, sem dependência externa", "main": "server.js", "type": "module", "license": "MIT", "author": "Rodolfo Franco (FrancosCorporation)", "scripts": {"start": "node server.js", "test": "node --test \"test/*.mjs\""}, "engines": {"node": ">=18"}}
