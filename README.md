@@ -5,26 +5,54 @@ Eu queria jogar Lig 4 no navegador com uma IA que joga de verdade — bloqueia a
 ## O que tem
 
 - **Avaliação por janelas de 4** (o que faz a IA do Lig 4 jogar forte): cada janela de 4 casas em linha conta — 3 minhas + 1 vazia = um lance da vitória (+60), 2+2 = boa posição (+12), o adversário com 3+1 = bloquear URGENTE (−70); janela misturada vale nada; a coluna do centro vale mais (participa de mais janelas)
-- **Minimax (negamax) com poda alfa-beta + iterative deepening** com orçamento de tempo (PC = 800ms ≈ profundidade 7-9, Impossível = 2500ms ≈ 10-13)
+- **Minimax (negamax) com poda alfa-beta + iterative deepening** com orçamento de tempo — quanto mais fundo, mais forte
 - **Variedade na escolha**: entre colunas quase equivalentes (≤ 15cp) a IA sorteia — o jogo nunca sai igual
-- **4 modos**: Jogador × Jogador · **IA Fácil** (busca rasa + ruído na avaliação — erra lances) · **IA Média** · **IA Difícil** (3 segundos de iterative deepening — profundidade máxima)
+- **4 modos**: Jogador × Jogador · **IA Fácil** (busca rasa + ruído ±90cp na escolha — erra lances de verdade) · **IA Média** (800ms) · **IA Difícil** (3000ms de iterative deepening — mais fundo)
 - **Placar de sessão** e destaque da linha vencedora (verde + contorno dourado)
+- **Modo LLM: a IA de verdade roda DENTRO do navegador** (separado abaixo)
+
+## Modo LLM — inteligência artificial local, sem servidor
+
+Escolha "LLM (roda no navegador)" no seletor Modo. Aí o jogo para de usar o minimax e passa a
+chamar uma **LLM de verdade** — mas tudo rodando na sua própria máquina:
+
+- **Zero servidor, zero API**: a biblioteca WebLLM está embutida no repositório
+  (`js/vendor/webllm.esm.js`) e o modelo (Qwen2.5-0.5B, ~350MB) é baixado **uma única vez**
+  pelo navegador, fica no cache local e a inferência acontece via **WebGPU** na sua
+  placa de vídeo. Depois do primeiro download, joga 100% offline.
+- **O LLM não inventa lance**: o jogo manda pra ele o menu de colunas que o MINIMAX já
+  avaliou (com o score de cada uma) e ele escolhe UMA — respondendo
+  `{"i": <nº>, "motivo": "<frase em pt-BR>"}`. Resposta fora do menu, JSON torto
+  ou erro de WebGPU → uma segunda tentativa com o limite explícito e, se ainda assim falhar,
+  **o minimax clássico assume** (o jogo nunca trava).
+- **Modelos testados à mão**: o Qwen2.5-0.5B-Instruct (64,5 tok/s na GPU, JSON perfeito) e o
+  SmolLM2-360M (mais leve) ficam disponíveis no painel; o Qwen3-0.6B foi testado e DESCARTADO
+  (gasta tokens "pensando" e não obedece o JSON).
+- **Funciona até SEM placa de vídeo**: se o navegador não achar a GPU, o WebGPU cai no
+  SwiftShader (software, na CPU). O único requisito é **ativar o WebGPU uma vez** — e fica
+  pra sempre:
+  1. abra `chrome://flags/#enable-unsafe-webgpu` (no Brave: `brave://flags/#enable-unsafe-webgpu`)
+  2. ponha **Enabled** e clique em **Relaunch** (reabra o navegador)
+  3. recarregue o jogo — pronto, o painel mostra a placa e o modelo carrega
+  Com GPU AMD/Intel/Nova que suporta Vulkan, o Chrome usa a placa direto (~64 tok/s no Qwen2.5-0.5B);
+  sem placa, roda na CPU mesmo.
 
 ## Como rodar
 
 ```bash
 npm start          # sobe o servidor estático em http://localhost:3347
-npm test           # 17 testes das regras + da IA (node --test)
+npm test           # 35 testes: regras + IA minimax + LLM (node --test)
 ```
 
 **Jogue online agora**: https://francoscorporation.github.io/lig4_ia/ — o jogo é 100% estático (servidor só serve arquivos). Para rodar local use `npm start` (abrir o index.html direto via file:// não carrega os módulos ES do navegador).
 
 ## Como foi testado
 
-17 testes automatizados (node --test) cobrindo as regras e a IA, todos passando:
+35 testes automatizados (node --test) cobrindo as regras, a IA e o modo LLM, todos passando:
 
 - **Regras (10)**: tabuleiro 7×6 vazio · a quantidade certa de janelas (24 horizontais + 21 verticais + 24 diagonais) · a peça cai na linha mais baixa · coluna cheia devolve null · vitórias nas 4 direções (horizontal, vertical, diagonais ↗ e ↘) · 3 em linha NÃO vence · empate com o tabuleiro cheio · o estado do jogo (vitória quando quem jogou fechou)
 - **IA (7)**: coluna válida na posição inicial · **bloqueia a ameaça de 3 em linha do adversário** (joga na coluna exata) · **fecha a própria vitória quando disponível** · a vantagem do centro no score · profundidade 6 em menos de 5s · o jogo da IA contra ela mesma termina (sem loop infinito) · escolheJogada com orçamento de tempo
+- **Modo LLM (18)**: prompt com tabuleiro compacto + colunas + limites · colunas em letras A-G · colunas são SEMPRE legais (coluna cheia nunca entra no menu) · extração de JSON (puro, em ``` e com chave `}}` extra) · validação só aceita índice dentro do menu · retry na 2ª tentativa · fallback no minimax em qualquer falha · o lance do LLM solta de verdade na coluna do menu · motor WebLLM sobe no browser e a jogada do modelo local aparece com motivo em pt-BR
 
 ## Estrutura
 
@@ -35,11 +63,15 @@ lig4_ia/
 ├── server.js          # servidor estático (sem build)
 ├── js/
 │   ├── lig4-rules.js  # regras: queda por coluna, janelas de 4, vitórias, empate
-│   ├── ai-minimax.js  # negamax com poda + avaliação por janelas + iterative deepening
-│   └── app.js         # UI: clique na coluna, destaque da vitória, placar, modos
+│   ├── ai-minimax.js  # negamax com poda + avaliação por janelas + iterative deepening + candidatos pro LLM
+│   ├── llm.js         # modo LLM: prompt, validação de JSON, motor WebLLM, fallback
+│   ├── vendor/
+│   │   └── webllm.esm.js  # WebLLM embutido (5,8MB) — sem CDN, sem linha de rede pro código
+│   └── app.js         # UI: clique na coluna, destaque da vitória, placar, modos, painel do LLM
 └── test/
     ├── lig4-rules-test.mjs
-    └── ia-test.mjs
+    ├── ia-test.mjs
+    └── llm-test.mjs
 ```
 
 ## Sobre a série

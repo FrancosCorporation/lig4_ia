@@ -55,6 +55,20 @@ function busca(estado, profundidade, alpha, beta) {
   return melhor;
 }
 
+// menu de candidatos avaliados (modo LLM): cada coluna legal com o score do minimax raso,
+// ordenado da melhor pro pior (7 colunas no máximo — prompt sempre curto)
+export function candidatosAvaliados(estado, opts = {}) {
+  const prof = opts.profundidade ?? 2;
+  const max = opts.max ?? 7;
+  const colunas = ordena(estado);
+  if (!colunas.length) return [];
+  return colunas
+    .map(col => ({ col, v: -busca(soltar(estado, col), Math.max(0, prof - 1), -Infinity, Infinity) }))
+    .sort((a, b) => b.v - a.v)
+    .slice(0, max)
+    .map(c => ({ col: c.col, score: c.v }));
+}
+
 // profundidade FIXA (usado nos testes)
 export function jogadaMinimax(estado, profundidade = 5) {
   const colunas = ordena(estado);
