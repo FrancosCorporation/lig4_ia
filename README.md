@@ -18,41 +18,45 @@ chamar uma **LLM de verdade** — mas tudo rodando na sua própria máquina:
 
 - **Zero servidor, zero API**: a biblioteca WebLLM está embutida no repositório
   (`js/vendor/webllm.esm.js`) e o modelo (Qwen2.5-0.5B, ~350MB) é baixado **uma única vez**
-  pelo navegador, fica no cache local e a inferência acontece via **WebGPU** na sua
-  placa de vídeo. Depois do primeiro download, joga 100% offline.
+  pelo navegador, fica no cache local e a inferência acontece **dentro do navegador**.
+  Depois do primeiro download, joga 100% offline.
+- **NÃO depende de placa de vídeo** — o jogo escolhe o motor sozinho:
+  - **Com WebGPU**: o modelo roda na GPU via WebLLM (~64 tok/s no Qwen2.5-0.5B) — o caminho rápido;
+  - **Sem WebGPU / sem placa nenhuma**: o **mesmo modelo** (GGUF `q4_k_m`, ~350MB) roda na
+    **RAM/CPU do seu sistema** com o llama.cpp compilado em WebAssembly (`@wllama/wllama`,
+    embutido em `js/vendor/wllama/`). Funciona em qualquer navegador moderno — sem flag, sem
+    driver, sem instalar nada. É mais lento (depende do seu processador) — para jogar rápido,
+    ative o WebGPU (abaixo, opcional).
 - **O LLM não inventa lance**: o jogo manda pra ele o menu de colunas que o MINIMAX já
   avaliou (com o score de cada uma) e ele escolhe UMA — respondendo
   `{"i": <nº>, "motivo": "<frase em pt-BR>"}`. Resposta fora do menu, JSON torto
-  ou erro de WebGPU → uma segunda tentativa com o limite explícito e, se ainda assim falhar,
+  ou falha de qualquer motor → uma segunda tentativa com o limite explícito e, se ainda assim falhar,
   **o minimax clássico assume** (o jogo nunca trava).
 - **Modelos testados à mão**: o Qwen2.5-0.5B-Instruct (64,5 tok/s na GPU, JSON perfeito) e o
   SmolLM2-360M (mais leve) ficam disponíveis no painel; o Qwen3-0.6B foi testado e DESCARTADO
-  (gasta tokens "pensando" e não obedece o JSON).
-- **Funciona até SEM placa de vídeo**: se o navegador não achar a GPU, o WebGPU cai no
-  SwiftShader (software, na CPU). O único requisito é **ativar o WebGPU uma vez** — e fica
-  pra sempre:
+  (gasta tokens "pensando" e não obedece o JSON). O modo CPU usa o Qwen2.5-0.5B em GGUF (mesmo modelo, quantização compatível com o llama.cpp).
+- **Quer velocidade máxima? (opcional)** — ative o WebGPU uma vez e ele fica pra sempre:
   1. abra `chrome://flags/#enable-unsafe-webgpu` (no Brave: `brave://flags/#enable-unsafe-webgpu`)
   2. ponha **Enabled** e clique em **Relaunch** (reabra o navegador)
-  3. recarregue o jogo — pronto, o painel mostra a placa e o modelo carrega
-  Com GPU AMD/Intel/Nova que suporta Vulkan, o Chrome usa a placa direto (~64 tok/s no Qwen2.5-0.5B);
-  sem placa, roda na CPU mesmo.
+  3. recarregue o jogo — pronto, o painel mostra a placa e o modelo carrega na GPU
+  Sem isso, o modo LLM segue funcionando na RAM do seu sistema (é só mais lento).
 
 ## Como rodar
 
 ```bash
 npm start          # sobe o servidor estático em http://localhost:3347
-npm test           # 35 testes: regras + IA minimax + LLM (node --test)
+npm test           # 42 testes: regras + IA minimax + LLM (node --test)
 ```
 
 **Jogue online agora**: https://francoscorporation.github.io/lig4_ia/ — o jogo é 100% estático (servidor só serve arquivos). Para rodar local use `npm start` (abrir o index.html direto via file:// não carrega os módulos ES do navegador).
 
 ## Como foi testado
 
-35 testes automatizados (node --test) cobrindo as regras, a IA e o modo LLM, todos passando:
+42 testes automatizados (node --test) cobrindo as regras, a IA e o modo LLM, todos passando:
 
 - **Regras (10)**: tabuleiro 7×6 vazio · a quantidade certa de janelas (24 horizontais + 21 verticais + 24 diagonais) · a peça cai na linha mais baixa · coluna cheia devolve null · vitórias nas 4 direções (horizontal, vertical, diagonais ↗ e ↘) · 3 em linha NÃO vence · empate com o tabuleiro cheio · o estado do jogo (vitória quando quem jogou fechou)
 - **IA (7)**: coluna válida na posição inicial · **bloqueia a ameaça de 3 em linha do adversário** (joga na coluna exata) · **fecha a própria vitória quando disponível** · a vantagem do centro no score · profundidade 6 em menos de 5s · o jogo da IA contra ela mesma termina (sem loop infinito) · escolheJogada com orçamento de tempo
-- **Modo LLM (18)**: prompt com tabuleiro compacto + colunas + limites · colunas em letras A-G · colunas são SEMPRE legais (coluna cheia nunca entra no menu) · extração de JSON (puro, em ``` e com chave `}}` extra) · validação só aceita índice dentro do menu · retry na 2ª tentativa · fallback no minimax em qualquer falha · o lance do LLM solta de verdade na coluna do menu · motor WebLLM sobe no browser e a jogada do modelo local aparece com motivo em pt-BR
+- **Modo LLM (24)**: prompt com tabuleiro compacto + colunas + limites · colunas em letras A-G · colunas são SEMPRE legais (coluna cheia nunca entra no menu) · extração de JSON (puro, em ``` e com chave `}}` extra) · validação só aceita índice dentro do menu · retry na 2ª tentativa · fallback no minimax em qualquer falha · o lance do LLM solta de verdade na coluna do menu · motor WebLLM sobe no browser e a jogada do modelo local aparece com motivo em pt-BR · seleção de motor (sem WebGPU → CPU na RAM do sistema · com placa → GPU · download que falha não é mascarado)
 
 ## Estrutura
 
@@ -66,7 +70,8 @@ lig4_ia/
 │   ├── ai-minimax.js  # negamax com poda + avaliação por janelas + iterative deepening + candidatos pro LLM
 │   ├── llm.js         # modo LLM: prompt, validação de JSON, motor WebLLM, fallback
 │   ├── vendor/
-│   │   └── webllm.esm.js  # WebLLM embutido (5,8MB) — sem CDN, sem linha de rede pro código
+│   │   ├── webllm.esm.js  # WebLLM embutido (5,8MB) — caminho rápido (WebGPU), sem CDN
+│   │   └── wllama/        # wllama embutido (index.js + wllama.wasm 8,1MB) — caminho CPU/RAM
 │   └── app.js         # UI: clique na coluna, destaque da vitória, placar, modos, painel do LLM
 └── test/
     ├── lig4-rules-test.mjs
